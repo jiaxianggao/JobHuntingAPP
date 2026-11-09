@@ -20,6 +20,7 @@ ASSETS = {
 }
 ROLE_PATH = re.compile(r"/api/roles/([1-9][0-9]{0,17})")
 SUBMIT_PATH = re.compile(ROLE_PATH.pattern + "/submit")
+RESULT_PATH = re.compile(ROLE_PATH.pattern + "/result")
 ATTACHMENT_PATH = re.compile(ROLE_PATH.pattern + "/attachments/([^/]+)")
 ATTACHMENT_LIMIT = 25 * 1024**2
 ROLE_FIELDS = ("company_name", "company_type", "role_title")
@@ -27,6 +28,21 @@ ROLE_FIELDS = ("company_name", "company_type", "role_title")
 
 class RequestTooLarge(Exception):
     pass
+
+
+def calendar_date(value, label):
+    try:
+        if isinstance(value, str) and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
+            return date.fromisoformat(value)
+    except ValueError:
+        pass
+    raise ValueError(f"Choose a valid {label}.")
+
+
+def submission_date(value):
+    if calendar_date(value, "application date") > date.today():
+        raise ValueError("Choose today or an earlier application date.")
+    return value
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -94,8 +110,7 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Expected a JSON object.")
         return data
 
-    def role_fields(self):
-        data = self.read_json()
+    def role_fields(self, data):
         values = [data.get(field) for field in ROLE_FIELDS]
         if any(not isinstance(value, str) or not 0 < len(value.strip()) <= 200 for value in values):
             raise ValueError("Enter a company name, company type, and role title (up to 200 characters each).")
@@ -115,6 +130,23 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Choose a file with a valid filename.")
         self.send_json(200, storage.save_attachment(self.server.db_path, role_id, kind, names[0], content))
 
+    def save_result(self, role_id):
+        data = self.read_json()
+        kind = data.get("kind")
+        if kind not in ("rejection", "interview"):
+            raise ValueError("Choose Rejection or Interview.")
+        received = calendar_date(data.get("received_on"), "response date").isoformat()
+        interview = None
+        final_result = ""
+        if kind == "interview":
+            interview = calendar_date(data.get("interview_on"), "interview date").isoformat()
+            final_result = data.get("final_result", "")
+            if not isinstance(final_result, str) or len(final_result) > 1000:
+                raise ValueError("Enter a final result of up to 1,000 characters.")
+        self.send_json(200, storage.save_result(
+            self.server.db_path, role_id, kind, received, interview, final_result.strip()
+        ))
+
     def route(self, url):
         if self.command == "GET" and url.path in ASSETS:
             filename, mime = ASSETS[url.path]
@@ -124,31 +156,31 @@ class Handler(BaseHTTPRequestHandler):
         elif url.path == "/api/roles" and self.command == "GET":
             self.send_json(200, storage.list_roles(self.server.db_path))
         elif url.path == "/api/roles" and self.command == "POST":
-            self.send_json(201, storage.save_role(self.server.db_path, self.role_fields()))
+            data = self.read_json()
+            submitted = submission_date(data["submitted_on"]) if "submitted_on" in data else None
+            self.send_json(201, storage.save_role(self.server.db_path, self.role_fields(data), submitted_on=submitted))
         elif self.command == "POST" and (match := SUBMIT_PATH.fullmatch(url.path)):
-            value = self.read_json().get("submitted_on")
-            try:
-                if not isinstance(value, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
-                    raise ValueError
-                submitted = date.fromisoformat(value)
-            except ValueError as error:
-                raise ValueError("Choose a valid application date.") from error
-            if submitted > date.today():
-                raise ValueError("Choose today or an earlier application date.")
+            value = submission_date(self.read_json().get("submitted_on"))
             self.send_json(200, storage.submit_role(self.server.db_path, int(match[1]), value))
+        elif self.command == "PUT" and (match := RESULT_PATH.fullmatch(url.path)):
+            self.save_result(int(match[1]))
         elif (match := ATTACHMENT_PATH.fullmatch(url.path)) and self.command in {"GET", "PUT"}:
             self.attachment(url, int(match[1]), match[2])
-        elif (match := ROLE_PATH.fullmatch(url.path)) and self.command in {"GET", "PATCH"}:
+        elif (match := ROLE_PATH.fullmatch(url.path)) and self.command in {"GET", "PATCH", "DELETE"}:
             role_id = int(match[1])
+            if self.command == "DELETE":
+                storage.delete_role(self.server.db_path, role_id)
+                self.send_json(200, {"deleted": role_id})
+                return
             if self.command == "GET":
                 role = storage.read_role(self.server.db_path, role_id)
             else:
-                role = storage.save_role(self.server.db_path, self.role_fields(), role_id)
+                role = storage.save_role(self.server.db_path, self.role_fields(self.read_json()), role_id)
             self.send_json(200, role)
         else:
             self.send_json(404, {"error": "Page not found."})
 
-    do_GET = do_POST = do_PATCH = do_PUT = dispatch
+    do_GET = do_POST = do_PATCH = do_PUT = do_DELETE = dispatch
 
     def log_message(self, format, *args):
         pass

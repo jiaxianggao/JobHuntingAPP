@@ -78,11 +78,39 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(json.loads(self.request("GET", path)[1])["role_title"], "New title")
         self.assertEqual(len(json.loads(self.request("GET", "/api/roles")[1])), 1)
 
+    def test_delete_application_removes_documents_and_result(self):
+        other = self.create_role()
+        role = self.create_role()
+        path = f"/api/roles/{role['id']}"
+        today = date.today().isoformat()
+        self.assertEqual(self.request("POST", path + "/submit", {"submitted_on": today})[0], 200)
+        self.assertEqual(self.request("PUT", path + "/result", {"kind": "rejection", "received_on": today})[0], 200)
+        self.assertEqual(self.request("PUT", path + "/attachments/cv?filename=CV.pdf", b"sample")[0], 200)
+        self.assertEqual(self.request("DELETE", path, headers={"Origin": "https://other.test"})[0], 403)
+        self.assertEqual(self.request("DELETE", path)[0], 200)
+        self.assertEqual(self.request("GET", path)[0], 404)
+        self.assertEqual(self.request("GET", path + "/attachments/cv")[0], 404)
+        self.assertEqual(json.loads(self.request("GET", "/api/roles")[1]), [other])
+        with storage.connect(self.db) as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM results").fetchone()[0], 0)
+        storage.initialize(self.db)
+        self.assertGreater(self.create_role()["id"], role["id"])
+
     def test_blank_fields_leave_record_unchanged(self):
         role = self.create_role()
         path = f"/api/roles/{role['id']}"
         self.assertEqual(self.request("PATCH", path, self.role_fields | {"role_title": " "})[0], 400)
         self.assertEqual(json.loads(self.request("GET", path)[1]), role)
+
+    def test_create_role_already_submitted_on_calendar_date(self):
+        submitted = (date.today() - timedelta(days=2)).isoformat()
+        status, body = self.request("POST", "/api/roles", self.role_fields | {"submitted_on": submitted})
+        self.assertEqual(status, 201)
+        role = json.loads(body)
+        self.assertEqual(role["submitted_on"], submitted)
+        self.assertEqual(role["days_since_submission"], 2)
+        self.assertEqual(self.request("POST", "/api/roles", self.role_fields | {"submitted_on": "2026-02-30"})[0], 400)
+        self.assertEqual(len(json.loads(self.request("GET", "/api/roles")[1])), 1)
 
     def test_submit_with_valid_date(self):
         role = self.create_role()
@@ -91,6 +119,59 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body)["submitted_on"], "2026-01-04")
         self.assertEqual(self.request("GET", path)[1], body)
+
+    def test_results_age_and_late_response(self):
+        role = self.create_role()
+        path = f"/api/roles/{role['id']}"
+        submitted = (date.today() - timedelta(days=28)).isoformat()
+        self.assertEqual(self.request("POST", path + "/submit", {"submitted_on": submitted})[0], 200)
+        saved = json.loads(self.request("GET", path)[1])
+        self.assertEqual((saved["days_since_submission"], saved["result_status"]), (28, "no_response"))
+        received = date.today().isoformat()
+        result = {"kind": "interview", "received_on": received, "interview_on": received, "final_result": "Offer"}
+        self.assertEqual(self.request("PUT", path + "/result", result)[0], 200)
+        storage.initialize(self.db)
+        saved = json.loads(self.request("GET", path)[1])
+        self.assertEqual(saved["result_status"], "interview")
+        self.assertEqual(saved["result"], result)
+        self.assertEqual(saved["days_to_response"], 28)
+
+    def test_response_time_stops_on_received_date(self):
+        role = self.create_role()
+        path = f"/api/roles/{role['id']}"
+        submitted = (date.today() - timedelta(days=14)).isoformat()
+        received = (date.today() - timedelta(days=7)).isoformat()
+        self.assertEqual(self.request("POST", path + "/submit", {"submitted_on": submitted})[0], 200)
+        status, body = self.request("PUT", path + "/result", {"kind": "rejection", "received_on": received})
+        self.assertEqual(status, 200)
+        saved = json.loads(body)
+        self.assertEqual(saved["days_to_response"], 7)
+        self.assertEqual(saved["days_since_submission"], 14)
+
+    def test_existing_database_keeps_legacy_company_type(self):
+        role = self.create_role()
+        with storage.connect(self.db) as db:
+            db.execute("DROP TABLE results")
+        storage.initialize(self.db)
+        path = f"/api/roles/{role['id']}"
+        self.assertEqual(json.loads(self.request("GET", path)[1])["company_type"], "Technology")
+        status, body = self.request("PATCH", path, self.role_fields | {"role_title": "Updated role"})
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["company_type"], "Technology")
+
+    def test_result_requires_submission_and_valid_dates(self):
+        role = self.create_role()
+        path = f"/api/roles/{role['id']}"
+        today = date.today().isoformat()
+        result = {"kind": "rejection", "received_on": today}
+        self.assertEqual(self.request("PUT", path + "/result", result)[0], 400)
+        status, body = self.request("POST", path + "/submit", {"submitted_on": today})
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["days_since_submission"], 0)
+        self.assertEqual(json.loads(body)["result_status"], "awaiting")
+        self.assertEqual(self.request("PUT", path + "/result", result | {"received_on": "2020-01-01"})[0], 400)
+        self.assertEqual(self.request("PUT", path + "/result", result)[0], 200)
+        self.assertEqual(json.loads(self.request("GET", path)[1])["result_status"], "rejection")
 
     def test_invalid_or_future_date_preserves_draft(self):
         role = self.create_role()

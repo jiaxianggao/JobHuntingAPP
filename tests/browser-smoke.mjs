@@ -93,7 +93,7 @@ try {
   async function addRole(title) {
     await click("#add-role");
     await run(`Object.assign(document.querySelector('[name=company_name]'), {value:'Northstar'});
-      Object.assign(document.querySelector('[name=company_type]'), {value:'Technology'});
+      Object.assign(document.querySelector('[name=company_type]'), {value:'University'});
       Object.assign(document.querySelector('[name=role_title]'), {value:${JSON.stringify(title)}});`);
     await click("#save-role");
     await wait("!document.querySelector('#role-dialog').open && document.querySelector('#draft-roles').textContent.includes(" + JSON.stringify(title) + ")");
@@ -106,8 +106,12 @@ try {
   await addRole("Researcher");
   await click("#draft-roles article:first-child .actions button:first-child");
   await wait("document.querySelector('#role-dialog').open");
+  assert.equal(await run("document.querySelector('#save-role').hidden"), true);
+  await run("const companyField = document.querySelector('[name=company_type]'); companyField.value = 'Corporate'; companyField.dispatchEvent(new Event('input', { bubbles: true }))");
+  await wait("document.querySelector('#role-saved').textContent === 'Saved' && !document.querySelector('#save-role').disabled");
+  assert.equal((await (await fetch(origin + "/api/roles")).json())[0].company_type, "Corporate");
   await run("document.querySelector('[name=role_title]').value = 'Research Analyst'");
-  await click("#save-role");
+  await click("#close-role");
   await wait("!document.querySelector('#role-dialog').open && document.querySelector('#draft-roles').textContent.includes('Research Analyst')");
 
   await writeFile(original, "exact CV bytes");
@@ -127,10 +131,10 @@ try {
   assert.equal(await (await fetch(origin + downloadPath)).text(), "exact CV bytes");
   await click("#close-role");
 
-  await click("#draft-roles article:first-child .actions button:last-child");
+  await click("#draft-roles article:first-child .actions button:nth-child(2)");
   await click("#cancel-submit");
   await wait("document.querySelectorAll('#draft-roles article').length === 2");
-  await click("#draft-roles article:first-child .actions button:last-child");
+  await click("#draft-roles article:first-child .actions button:nth-child(2)");
   await click("#choose-today");
   const today = await run("document.querySelector('#application-date').value");
   await run(`window.realFetch = window.fetch; window.fetch = (...args) => args[0].endsWith('/submit')
@@ -140,25 +144,84 @@ try {
   assert.equal(await run("document.querySelector('#cancel-submit').disabled"), true, "Cancel must be disabled during submission");
   await run("window.releaseSubmission(); window.fetch = window.realFetch");
   await wait("document.querySelectorAll('#submitted-roles article').length === 1");
-  await click("#draft-roles article:first-child .actions button:last-child");
+  await click("#draft-roles article:first-child .actions button:nth-child(2)");
   await run("document.querySelector('#application-date').value = " + JSON.stringify(today));
   await click("#confirm-submit");
   await wait("document.querySelectorAll('#submitted-roles article').length === 2");
+  await run("document.querySelector('#role-search').value = 'research'; document.querySelector('#role-search').dispatchEvent(new Event('input'))");
+  await wait("document.querySelectorAll('#submitted-roles article').length === 1");
+  await wait("document.querySelector('#submitted-roles').textContent.includes('0 days since submission')");
+  await click("#show-results");
+  await wait("document.querySelectorAll('#result-list article').length === 2");
+  await click("#result-list article:first-child .actions button:last-child");
+  await run(`document.querySelector('[name=kind]').value = 'interview';
+    document.querySelector('[name=kind]').dispatchEvent(new Event('change'));
+    document.querySelector('[name=received_on]').value = ${JSON.stringify(today)};
+    document.querySelector('[name=interview_on]').value = ${JSON.stringify(today)};
+    document.querySelector('[name=final_result]').value = 'Offer';`);
+  await click("#save-result");
+  await wait("document.querySelector('#result-list').textContent.includes('Offer')");
+  assert.ok(await run("document.querySelector('#result-list').textContent.includes('Response after 0 days')"));
+  for (const [filter, expected, count] of [
+    [["awaiting"], "Awaiting response", 1],
+    [["rejection"], "No applications match the selected statuses.", 0],
+    [["interview"], "Offer", 1],
+    [["awaiting", "interview"], "Offer", 2],
+    [[], "Offer", 2],
+  ]) {
+    await run(`(() => {
+      const selected = ${JSON.stringify(filter)};
+      for (const checkbox of document.querySelectorAll('#result-filter input')) {
+        if (checkbox.checked !== selected.includes(checkbox.value)) checkbox.click();
+      }
+    })()`);
+    assert.equal(await run("document.querySelectorAll('#result-list article').length"), count);
+    assert.ok(await run("document.querySelector('#result-list').textContent.includes(" + JSON.stringify(expected) + ")"));
+  }
+  await click("#save-data");
+  await wait("document.querySelector('#save-status').textContent === 'Saved'");
   await click("#show-calendar");
-  await wait("document.querySelectorAll('#month-grid .day button').length === 2");
+  await wait("document.querySelectorAll('#month-grid .calendar-entry').length === 2");
   await click("#previous-month");
-  await wait("document.querySelectorAll('#month-grid .day button').length === 0");
+  await wait("document.querySelectorAll('#month-grid .calendar-entry').length === 0");
   await click("#next-month");
-  await wait("document.querySelectorAll('#month-grid .day button').length === 2");
-  await click("#month-grid .day button");
+  await wait("document.querySelectorAll('#month-grid .calendar-entry').length === 2");
+  await click("#month-grid .calendar-entry");
   await wait("document.querySelector('#role-dialog').open");
   await click("#close-role");
 
   await stop(server);
   port = await startServer(port);
   await openHome();
-  await wait("document.querySelectorAll('#month-grid .day button').length === 2");
+  await wait("document.querySelectorAll('#month-grid .calendar-entry').length === 2");
+  await click("#show-results");
+  await wait("document.querySelector('#result-list').textContent.includes('Offer')");
   assert.equal(await (await fetch(origin + downloadPath)).text(), "exact CV bytes");
+  await click("#show-board");
+  await wait("document.querySelectorAll('#submitted-roles .actions .danger').length === 2");
+  assert.equal(await run(`(() => {
+    const actions = document.querySelector('#submitted-roles .actions');
+    return actions.firstElementChild.getBoundingClientRect().top ===
+      actions.lastElementChild.getBoundingClientRect().top;
+  })()`), true);
+  await run("window.confirm = () => false");
+  await click("#submitted-roles .danger");
+  assert.equal(await run("document.querySelectorAll('#submitted-roles article').length"), 2);
+  await run("window.confirm = () => true");
+  await click("#submitted-roles .danger");
+  await wait("document.querySelectorAll('#submitted-roles article').length === 1");
+  await click("#show-calendar");
+  await wait("document.querySelectorAll('#month-grid .calendar-entry').length === 1");
+  await click(`#month-grid .calendar-date[data-date="${today}"]`);
+  await wait("document.querySelector('#role-dialog').open");
+  assert.equal(await run("document.querySelector('#role-status').textContent"), "Applied " + today);
+  await run(`document.querySelector('[name=company_name]').value = 'Calendar Company';
+    document.querySelector('[name=company_type]').value = 'Corporate';
+    document.querySelector('[name=role_title]').value = 'Calendar Role';`);
+  await click("#save-role");
+  await wait("document.querySelectorAll('#month-grid .calendar-entry').length === 2");
+  const calendarRole = (await (await fetch(origin + "/api/roles")).json()).find((role) => role.role_title === "Calendar Role");
+  assert.equal(calendarRole.submitted_on, today);
   assert.deepEqual(outsideRequests, []);
   console.log("Browser smoke passed, including upload and server process restart.");
 } finally {

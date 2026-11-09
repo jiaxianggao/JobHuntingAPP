@@ -13,9 +13,12 @@
     <nav aria-label="Pages">
       <button id="show-calendar" aria-pressed="true">Calendar</button>
       <button id="show-board" aria-pressed="false">Job Applications</button>
+      <button id="show-results" aria-pressed="false">Results</button>
     </nav>
+    <button class="primary" id="save-data">Save data</button>
   </header>
   <main>
+    <p id="save-status" role="status"></p>
     <section id="calendar-page">
       <h1>Application calendar</h1>
       <div class="heading month-heading">
@@ -28,21 +31,41 @@
     <p id="page-error" role="alert" hidden></p>
     <section id="board-page" hidden>
       <div class="heading"><h1>Job Applications</h1><button class="primary" id="add-role">+ Add role</button></div>
+      <label class="search">Search applications <input id="role-search" type="search" placeholder="Company or role title"></label>
+      <p id="search-empty" hidden>No matching applications.</p>
       <div class="board">
         <section><h2>Not submitted</h2><div id="draft-roles"></div></section>
         <section><h2>Submitted</h2><div id="submitted-roles"></div></section>
       </div>
+    </section>
+    <section id="results-page" hidden>
+      <h1>Results</h1>
+      <fieldset id="result-filter">
+        <legend>Filter by status</legend>
+        <label><input type="checkbox" value="awaiting"> Awaiting response</label>
+        <label><input type="checkbox" value="no_response"> No response after 4 weeks</label>
+        <label><input type="checkbox" value="rejection"> Rejection</label>
+        <label><input type="checkbox" value="interview"> Interview</label>
+      </fieldset>
+      <div id="result-list"></div>
     </section>
   </main>
   <dialog id="role-dialog" aria-labelledby="role-heading">
     <div class="heading"><h2 id="role-heading"></h2><button id="close-role" aria-label="Close application">Close</button></div>
     <form id="role-form">
       <label>Company name <input name="company_name" required maxlength="200"></label>
-      <label>Company type <input name="company_type" required maxlength="200"></label>
+      <label>Company type
+        <select name="company_type" required>
+          <option value="">Choose a company type</option>
+          <option>University</option>
+          <option>Corporate</option>
+        </select>
+      </label>
       <label>Role title <input name="role_title" required maxlength="200"></label>
       <p id="role-status"></p>
       <p id="role-error" role="alert" hidden></p>
-      <button class="primary" id="save-role">Save role</button>
+      <p id="role-saved" role="status"></p>
+      <button class="primary" id="save-role" type="submit" hidden>Add role</button>
     </form>
     <section id="attachments" aria-label="Saved documents" hidden>
       <h3>Saved documents</h3>
@@ -62,6 +85,25 @@
         <button type="button" id="cancel-submit">Cancel</button>
         <button class="primary" id="confirm-submit">Confirm</button>
       </div>
+    </form>
+  </dialog>
+  <dialog id="result-dialog" aria-labelledby="result-heading">
+    <div class="heading"><h2 id="result-heading"></h2><button id="close-result">Close</button></div>
+    <form id="result-form">
+      <label>Response
+        <select name="kind" required>
+          <option value="">Choose a response</option>
+          <option value="rejection">Rejection</option>
+          <option value="interview">Interview</option>
+        </select>
+      </label>
+      <label>Date received <input name="received_on" type="date" required></label>
+      <div id="interview-fields" hidden>
+        <label>Interview date <input name="interview_on" type="date"></label>
+        <label>Final result <textarea name="final_result" maxlength="1000" rows="3" placeholder="Add the outcome when you know it"></textarea></label>
+      </div>
+      <p id="result-error" role="alert" hidden></p>
+      <button class="primary" id="save-result" type="submit">Save result</button>
     </form>
   </dialog>
 </body>
