@@ -1,0 +1,35 @@
+:root {
+  font: 16px/1.5 system-ui, sans-serif;
+  color: #182d26;
+  background: #f5f8f6;
+}
+
+body { margin: 0; }
+header, main { padding: 1rem max(1rem, calc((100vw - 72rem) / 2)); }
+header { display: flex; align-items: center; gap: 1.5rem; background: white; border-bottom: 1px solid #cbd9d1; }
+nav { display: flex; gap: .5rem; }
+button, input { font: inherit; }
+button { cursor: pointer; background: white; color: inherit; border: 1px solid #a0b7ac; border-radius: .4rem; padding: .35rem .65rem; }
+button[aria-pressed="true"], .primary { background: #215644; color: white; border-color: #215644; }
+.heading { display: flex; gap: 1rem; justify-content: space-between; align-items: center; }
+.board { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.board section { background: #eaf1ed; border-radius: .65rem; padding: 1rem; }
+.board h2, dialog h2 { margin: 0 0 .6rem; font-size: 1.15rem; }
+article { background: white; border: 1px solid #cbd9d1; border-radius: .5rem; padding: .8rem; margin-bottom: .65rem; overflow-wrap: anywhere; }
+article p { margin: .3rem 0 .65rem; }
+dialog { width: min(28rem, 85vw); color: inherit; border: 1px solid #a0b7ac; border-radius: .65rem; }
+dialog::backdrop { background: #132a2180; }
+label { display: grid; gap: .2rem; margin: .8rem 0; }
+input { min-width: 0; padding: .35rem; }
+[role="alert"] { color: #9a261d; }
+.actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .65rem; }
+.month-heading { margin-bottom: .7rem; }
+.month-heading h2 { margin: 0; font-size: 1.15rem; }
+.calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: #cbd9d1; border: 1px solid #cbd9d1; }
+.weekday { background: #eaf1ed; text-align: center; padding: .4rem 0; }
+.day { min-height: 4rem; background: white; padding: .3rem; }
+.day.today > time { font-weight: bold; color: #215644; text-decoration: underline; }
+.day button { display: block; width: 100%; margin-top: .3rem; padding: .15rem .3rem; background: #e4f0e9; text-align: left; font-size: .85rem; overflow-wrap: anywhere; }
+#attachments { border-top: 1px solid #cbd9d1; margin-top: 1rem; }
+#attachments h3, #attachments p { margin: .6rem 0; }
+#document-list a { display: inline-block; overflow-wrap: anywhere; }

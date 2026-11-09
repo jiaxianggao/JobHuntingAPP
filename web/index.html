@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Job Hunt</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header>
+    <strong>Job Hunt</strong>
+    <nav aria-label="Pages">
+      <button id="show-calendar" aria-pressed="true">Calendar</button>
+      <button id="show-board" aria-pressed="false">Job Applications</button>
+    </nav>
+  </header>
+  <main>
+    <section id="calendar-page">
+      <h1>Application calendar</h1>
+      <div class="heading month-heading">
+        <button id="previous-month" aria-label="Previous month">‹</button>
+        <h2 id="month-name" aria-live="polite"></h2>
+        <button id="next-month" aria-label="Next month">›</button>
+      </div>
+      <div class="calendar" id="month-grid" aria-labelledby="month-name"></div>
+    </section>
+    <p id="page-error" role="alert" hidden></p>
+    <section id="board-page" hidden>
+      <div class="heading"><h1>Job Applications</h1><button class="primary" id="add-role">+ Add role</button></div>
+      <div class="board">
+        <section><h2>Not submitted</h2><div id="draft-roles"></div></section>
+        <section><h2>Submitted</h2><div id="submitted-roles"></div></section>
+      </div>
+    </section>
+  </main>
+  <dialog id="role-dialog" aria-labelledby="role-heading">
+    <div class="heading"><h2 id="role-heading"></h2><button id="close-role" aria-label="Close application">Close</button></div>
+    <form id="role-form">
+      <label>Company name <input name="company_name" required maxlength="200"></label>
+      <label>Company type <input name="company_type" required maxlength="200"></label>
+      <label>Role title <input name="role_title" required maxlength="200"></label>
+      <p id="role-status"></p>
+      <p id="role-error" role="alert" hidden></p>
+      <button class="primary" id="save-role">Save role</button>
+    </form>
+    <section id="attachments" aria-label="Saved documents" hidden>
+      <h3>Saved documents</h3>
+      <p>Maximum 25 MiB per file.</p>
+      <div id="document-list"></div>
+      <p id="attachment-error" role="alert" hidden></p>
+    </section>
+  </dialog>
+  <dialog id="submit-dialog" aria-labelledby="submit-heading">
+    <h2 id="submit-heading">Mark submitted</h2>
+    <p id="submit-role-name"></p>
+    <form id="submit-form">
+      <label>Application date <input id="application-date" type="date" required></label>
+      <button type="button" id="choose-today">Today</button>
+      <p id="submit-error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" id="cancel-submit">Cancel</button>
+        <button class="primary" id="confirm-submit">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
